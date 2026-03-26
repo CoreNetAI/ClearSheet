@@ -1,0 +1,46 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# cloudflare / opennext
+/.open-next/
+/.wrangler/
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env.local
+.env*.local
+
+# secrets / scratch notes (contain live keys — never commit)
+queries.txt
+.claude/settings.local.json
+
+# customer hand-off docs (contain a real login — keep out of the repo)
+CUSTOMER-HANDBOOK.md
+CUSTOMER-HANDBOOK.docx
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea
