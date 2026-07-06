@@ -1,0 +1,79 @@
+name: Nightly DB backup to R2
+
+# Free replacement for the paid Supabase backups: pg_dump nightly and upload the
+# dump to the R2 backups bucket, keeping the most recent 14. Restore steps are in
+# INTEGRATIONS.md.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # ~02:00-03:00 America/New_York
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      BUCKET: ${{ secrets.R2_BACKUPS_BUCKET }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          # Supabase runs Postgres 17; ubuntu-latest ships pg_dump 16, which
+          # refuses to dump a newer server. Install the matching v17 client
+          # from the official PostgreSQL APT repo.
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Create dump
+        run: |
+          set -euo pipefail
+          TS=$(date -u +%Y%m%d_%H%M%S)
+          FILE="clearsheet_${TS}.dump"
+          echo "FILE=$FILE" >> "$GITHUB_ENV"
+          # Use the v17 binary explicitly — the default /usr/bin/pg_dump on the
+          # runner is still 16 and won't dump a 17 server.
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
+            --no-owner --no-privileges --format=custom \
+            --file="$FILE"
+          ls -lh "$FILE"
+
+      - name: Upload to R2
+        run: |
+          set -euo pipefail
+          aws s3 cp "$FILE" "s3://${BUCKET}/backups/${FILE}" \
+            --endpoint-url "$R2_ENDPOINT"
+
+      - name: Prune to last 14
+        run: |
+          set -euo pipefail
+          KEYS=$(aws s3api list-objects-v2 \
+            --bucket "$BUCKET" --prefix "backups/" \
+            --query 'sort_by(Contents,&LastModified)[].Key' \
+            --output text --endpoint-url "$R2_ENDPOINT" || true)
+          if [ -z "$KEYS" ] || [ "$KEYS" = "None" ]; then
+            echo "No existing backups to prune."; exit 0
+          fi
+          # Oldest first; delete everything beyond the newest 14.
+          mapfile -t ARR < <(echo "$KEYS" | tr '\t' '\n')
+          COUNT=${#ARR[@]}
+          KEEP=14
+          if [ "$COUNT" -gt "$KEEP" ]; then
+            DEL=$((COUNT - KEEP))
+            for ((i=0; i<DEL; i++)); do
+              echo "Deleting old backup: ${ARR[$i]}"
+              aws s3 rm "s3://${BUCKET}/${ARR[$i]}" --endpoint-url "$R2_ENDPOINT"
+            done
+          else
+            echo "Only $COUNT backups; nothing to prune."
+          fi

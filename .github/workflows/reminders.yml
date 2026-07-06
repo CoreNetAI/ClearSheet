@@ -1,0 +1,31 @@
+name: Timesheet reminders
+
+# Emails each active employee a reminder listing every timesheet period still
+# awaiting submission (the current open period plus any missed past ones).
+# Runs weekly on Monday morning — when the most common (weekly) period opens —
+# and the email always lists ALL currently-due periods, so biweekly/monthly
+# assignments are covered by the same nudge. Adjust the cron to change cadence.
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 13:00 UTC (~8-9am US Eastern)
+  workflow_dispatch: {}
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder endpoint
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          CODE=$(curl -s -o /tmp/out -w "%{http_code}" -X POST \
+            "${APP_BASE_URL}/api/cron/reminders" \
+            -H "Authorization: Bearer ${CRON_SECRET}")
+          echo "HTTP $CODE"
+          cat /tmp/out; echo
+          if [ "$CODE" != "200" ]; then
+            echo "Reminder run failed."; exit 1
+          fi
