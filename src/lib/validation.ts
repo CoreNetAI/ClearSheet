@@ -20,6 +20,13 @@ export const entrySchema = z.object({
   note: z.string().max(500).optional().nullable(),
 });
 
+export const CHALLENGES_LEARNINGS_MAX = 2000;
+
+export const challengesLearningsSchema = z
+  .string()
+  .trim()
+  .max(CHALLENGES_LEARNINGS_MAX);
+
 export const saveTimesheetSchema = z.object({
   timesheetId: z.string().uuid().optional(),
   assignmentId: z.string().uuid(),
@@ -110,6 +117,15 @@ export const invoiceAdjustmentSchema = z.object({
   label: z.string().min(1, "Label is required").max(200),
   amount: z.coerce.number().min(0),
   employeeId: z.string().uuid().optional().nullable(),
+});
+
+export const emailTemplateSchema = z.object({
+  key: z.string().min(1),
+  subject: z.string().trim().min(1, "Subject is required").max(200),
+  heading: z.string().trim().min(1, "Heading is required").max(200),
+  body: z.string().trim().min(1, "Message is required").max(5000),
+  buttonLabel: z.string().trim().min(1, "Button text is required").max(60),
+  footer: z.string().trim().max(2000),
 });
 
 export type EntryInput = z.infer<typeof entrySchema>;

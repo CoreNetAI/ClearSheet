@@ -9,15 +9,17 @@ import {
   assignmentSchema,
   changeRateSchema,
   clientSchema,
+  emailTemplateSchema,
   userSchema,
 } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { getEmailContent, isEmailEnabled, sendEmail } from "@/lib/email";
 import {
-  isEmailEnabled,
-  sendEmail,
-  inviteEmailHtml,
-  emailChangedHtml,
-} from "@/lib/email";
+  EMAIL_TEMPLATES,
+  findUnknownVariables,
+  isEmailTemplateKey,
+  renderEmail,
+} from "@/lib/email-templates";
 import { appBaseUrl, firm } from "@/lib/config";
 import { ROLE_LABELS, type Role } from "@/lib/types";
 import { z } from "zod";
@@ -40,19 +42,22 @@ async function issueInvite(opts: {
   fullName: string;
   role: string;
   linkType: "invite" | "recovery";
-}): Promise<{ ok: true; result: InviteResult } | { ok: false; error: string }> {
+}): Promise<
+  { ok: true; result: InviteResult; userId: string } | { ok: false; error: string }
+> {
   const service = createServiceClient();
   const { data, error } = await service.auth.admin.generateLink(
     opts.linkType === "invite"
       ? {
           type: "invite",
           email: opts.email,
-          options: { data: { full_name: opts.fullName, role: opts.role } },
+          options: { data: { full_name: opts.fullName } },
         }
       : { type: "recovery", email: opts.email }
   );
   const hashedToken = data?.properties?.hashed_token;
-  if (error || !hashedToken) {
+  const userId = data?.user?.id;
+  if (error || !hashedToken || !userId) {
     return { ok: false, error: error?.message || "Could not generate invite link." };
   }
 
@@ -64,20 +69,20 @@ async function issueInvite(opts: {
 
   let emailed = false;
   if (isEmailEnabled()) {
-    const res = await sendEmail({
-      to: opts.email,
-      subject: "You're invited to ClearSheet",
-      html: inviteEmailHtml({
+    const email = renderEmail(
+      await getEmailContent("user_invite"),
+      {
         firmName: firm.name,
-        inviteeName: opts.fullName,
-        inviteUrl,
+        inviteeName: opts.fullName?.trim() || "there",
         roleLabel: ROLE_LABELS[opts.role as Role] ?? opts.role,
-      }),
-    });
+      },
+      { buttonUrl: inviteUrl }
+    );
+    const res = await sendEmail({ to: opts.email, ...email });
     emailed = res.ok; // email failure is non-fatal — the link is still returned
   }
 
-  return { ok: true, result: { inviteUrl, emailed } };
+  return { ok: true, result: { inviteUrl, emailed }, userId };
 }
 
 export async function sendTestEmail(to: string): Promise<ActionResult> {
@@ -154,6 +159,89 @@ async function findAuthUserByEmail(
   return null;
 }
 
+// ---------------------------------------------------------- Email templates
+export async function saveEmailTemplate(input: {
+  key: string;
+  subject: string;
+  heading: string;
+  body: string;
+  buttonLabel: string;
+  footer: string;
+}): Promise<ActionResult> {
+  const parsed = emailTemplateSchema.safeParse(input);
+  if (!parsed.success) {
+    return actionError(parsed.error.issues[0]?.message || "Invalid template.");
+  }
+  const { key, ...content } = parsed.data;
+  if (!isEmailTemplateKey(key)) return actionError("Unknown email template.");
+
+  const unknown = findUnknownVariables(EMAIL_TEMPLATES[key], content);
+  if (unknown.length > 0) {
+    return actionError(
+      `Unknown variable: ${unknown.map((v) => `{{${v}}}`).join(", ")}`
+    );
+  }
+
+  const ctx = await adminContext();
+  if (!ctx) return actionError("Not authorized.");
+
+  const { data: row, error } = await ctx.supabase
+    .from("email_templates")
+    .upsert(
+      {
+        key,
+        subject: content.subject,
+        heading: content.heading,
+        body: content.body,
+        button_label: content.buttonLabel,
+        footer: content.footer,
+        updated_by: ctx.userId,
+      },
+      { onConflict: "key" }
+    )
+    .select("id")
+    .single();
+  if (error || !row) return actionError("Could not save the template.");
+
+  await writeAudit(ctx.supabase, {
+    actorId: ctx.userId,
+    entityType: "email_template",
+    entityId: row.id,
+    action: "update",
+    detail: { key },
+  });
+
+  revalidatePath("/admin/email-templates");
+  return actionOk();
+}
+
+export async function resetEmailTemplate(key: string): Promise<ActionResult> {
+  if (!isEmailTemplateKey(key)) return actionError("Unknown email template.");
+
+  const ctx = await adminContext();
+  if (!ctx) return actionError("Not authorized.");
+
+  const { data: rows, error } = await ctx.supabase
+    .from("email_templates")
+    .delete()
+    .eq("key", key)
+    .select("id");
+  if (error) return actionError("Could not reset the template.");
+
+  if (rows?.[0]) {
+    await writeAudit(ctx.supabase, {
+      actorId: ctx.userId,
+      entityType: "email_template",
+      entityId: rows[0].id,
+      action: "reset",
+      detail: { key },
+    });
+  }
+
+  revalidatePath("/admin/email-templates");
+  return actionOk();
+}
+
 // -------------------------------------------------------------------- Users
 export async function createUser(input: {
   email: string;
@@ -206,22 +294,27 @@ export async function createUser(input: {
   }
   if (!invite.ok) return actionError(invite.error);
 
-  // The signup trigger created the profile (invite_status='pending'); ensure
-  // the admin-entered fields match exactly. Do not touch invite_status here.
-
-  // emp_code is assigned atomically by the handle_new_user trigger for
-  // employees — so we sync the admin-entered fields here, NOT the code.
-  const { data: row } = await service
+  // The signup trigger created the profile as an employee. This is the only
+  // place the chosen role is applied, so match by user id (stored emails may
+  // differ in case) and fail loudly. Marked pending here because Supabase sets
+  // invited_at after the trigger runs, so the trigger sees every user as accepted.
+  const { data: row, error: profileError } = await service
     .from("profiles")
     .update({
       full_name: parsed.data.full_name,
       role: parsed.data.role,
       status: parsed.data.status ?? "active",
       email: parsed.data.email,
+      invite_status: "pending",
     })
-    .eq("email", parsed.data.email)
+    .eq("id", invite.userId)
     .select("id, emp_code")
     .maybeSingle();
+  if (profileError || !row) {
+    return actionError(
+      "The user was created, but their role could not be set. Check it on the Users page."
+    );
+  }
 
   // Safety net for environments where the trigger hasn't been updated yet: if an
   // employee somehow still has no code, allocate one. Only when missing, so it
@@ -399,21 +492,20 @@ export async function updateUser(input: {
     } else if (isEmailEnabled()) {
       // Accepted user: notify the new AND old address (so the previous inbox
       // owner is alerted if the change was unexpected). Password is unchanged.
-      const html = emailChangedHtml({
-        firmName: firm.name,
-        userName: parsed.data.full_name,
-        newEmail: parsed.data.email,
-        appUrl: appBaseUrl,
-      });
+      const email = renderEmail(
+        await getEmailContent("email_changed"),
+        {
+          firmName: firm.name,
+          userName: parsed.data.full_name?.trim() || "there",
+          newEmail: parsed.data.email,
+        },
+        { buttonUrl: `${appBaseUrl}/login` }
+      );
       const recipients = Array.from(
         new Set([parsed.data.email, oldEmail].filter(Boolean))
       );
       for (const to of recipients) {
-        await sendEmail({
-          to,
-          subject: "Your ClearSheet sign-in email changed",
-          html,
-        });
+        await sendEmail({ to, ...email });
       }
     }
   }

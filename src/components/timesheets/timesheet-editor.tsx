@@ -13,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { computeTotals } from "@/lib/calc";
+import { CHALLENGES_LEARNINGS_MAX } from "@/lib/validation";
 import { formatDayShort, weekdayShort } from "@/lib/periods";
 import type { EntryType } from "@/lib/types";
 import {
@@ -63,6 +65,7 @@ export function TimesheetEditor({
   initialEntries,
   initialAttachments,
   reviewNote,
+  initialChallengesLearnings,
 }: {
   timesheetId: string;
   periodDays: string[];
@@ -75,6 +78,7 @@ export function TimesheetEditor({
   initialEntries: { work_date: string; hours: number; entry_type: EntryType }[];
   initialAttachments: AttachmentItem[];
   reviewNote?: string | null;
+  initialChallengesLearnings?: string | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -82,6 +86,9 @@ export function TimesheetEditor({
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] =
     useState<AttachmentItem[]>(initialAttachments);
+  const [challengesLearnings, setChallengesLearnings] = useState(
+    initialChallengesLearnings ?? ""
+  );
 
   const [grid, setGrid] = useState<Record<string, DayCell>>(() => {
     const base: Record<string, DayCell> = {};
@@ -214,7 +221,11 @@ export function TimesheetEditor({
 
   function handleSave() {
     startTransition(async () => {
-      const res = await saveTimesheet(timesheetId, flatEntries);
+      const res = await saveTimesheet(
+        timesheetId,
+        flatEntries,
+        challengesLearnings
+      );
       if (res.ok) toast({ title: "Draft saved" });
       else toast({ variant: "destructive", title: res.error });
     });
@@ -225,6 +236,13 @@ export function TimesheetEditor({
       toast({ variant: "destructive", title: "Add at least one day with hours." });
       return;
     }
+    if (!challengesLearnings.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Enter your Challenges/Learnings before submitting.",
+      });
+      return;
+    }
     if (!hasApproved) {
       toast({
         variant: "destructive",
@@ -233,7 +251,11 @@ export function TimesheetEditor({
       return;
     }
     setSubmitting(true);
-    const res = await submitTimesheet(timesheetId, flatEntries);
+    const res = await submitTimesheet(
+      timesheetId,
+      flatEntries,
+      challengesLearnings
+    );
     setSubmitting(false);
     if (res.ok) {
       toast({ title: "Timesheet submitted for review" });
@@ -391,6 +413,31 @@ export function TimesheetEditor({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <label htmlFor="challengesLearnings">Challenges/Learnings</label>
+          </CardTitle>
+          <CardDescription>
+            Share any challenges you faced or things you learned this period
+            (required to submit).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-1">
+          <Textarea
+            id="challengesLearnings"
+            value={challengesLearnings}
+            onChange={(e) => setChallengesLearnings(e.target.value)}
+            maxLength={CHALLENGES_LEARNINGS_MAX}
+            rows={4}
+            aria-required
+          />
+          <p className="text-right text-xs text-muted-foreground">
+            {challengesLearnings.length}/{CHALLENGES_LEARNINGS_MAX}
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
         <Button

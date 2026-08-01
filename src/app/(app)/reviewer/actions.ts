@@ -9,6 +9,7 @@ import { computeTotals } from "@/lib/calc";
 import { rateForPeriod } from "@/lib/rates";
 import { entrySchema } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { notifyEmployeeOfReview } from "@/lib/notifications";
 import type { EntryInput } from "@/lib/validation";
 
 async function reviewerContext() {
@@ -60,6 +61,8 @@ export async function approveTimesheet(
     action: "approve",
   });
 
+  await notifyEmployeeOfReview(supabase, timesheetId, "approved");
+
   revalidatePath("/reviewer");
   revalidatePath(`/reviewer/${timesheetId}`);
   return actionOk();
@@ -104,6 +107,8 @@ export async function rejectTimesheet(
     action: "reject",
     detail: { note: parsed.data },
   });
+
+  await notifyEmployeeOfReview(supabase, timesheetId, "rejected", parsed.data);
 
   revalidatePath("/reviewer");
   revalidatePath(`/reviewer/${timesheetId}`);
@@ -187,6 +192,13 @@ export async function editAndApprove(
     action: "edit_and_approve",
     detail: { note: parsed.data.note, totals },
   });
+
+  await notifyEmployeeOfReview(
+    supabase,
+    timesheetId,
+    "edited_and_approved",
+    parsed.data.note
+  );
 
   revalidatePath("/reviewer");
   revalidatePath(`/reviewer/${timesheetId}`);

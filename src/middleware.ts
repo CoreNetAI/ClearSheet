@@ -8,8 +8,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except Next internals, static assets, and webhooks
-    // (webhooks authenticate via provider signatures, not user sessions).
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // Run on everything except Next internals, static assets, webhooks, and cron
+    // (webhooks authenticate via provider signatures and cron via CRON_SECRET,
+    // not user sessions).
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

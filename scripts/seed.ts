@@ -94,7 +94,7 @@ async function ensureUser(
       email,
       password: PASSWORD,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role },
+      user_metadata: { full_name: fullName },
     });
     if (error || !data.user) throw error ?? new Error(`createUser ${email}`);
     id = data.user.id;
@@ -152,7 +152,10 @@ async function ensureAssignment(input: {
     .eq("employee_id", input.employee_id)
     .eq("client_id", input.client_id)
     .maybeSingle();
-  if (found) return found.id;
+  if (found) {
+    await ensureInitialRate(found.id);
+    return found.id;
+  }
   const { data, error } = await db
     .from("assignments")
     .insert({
@@ -171,7 +174,35 @@ async function ensureAssignment(input: {
     .select("id")
     .single();
   if (error) throw error;
+  await ensureInitialRate(data.id);
   return data.id;
+}
+
+// Timesheets are priced from assignment_rates, so an assignment without a row
+// there would price every saved timesheet at $0. Copies the assignment's rate.
+async function ensureInitialRate(assignmentId: string): Promise<void> {
+  const { count, error: countError } = await db
+    .from("assignment_rates")
+    .select("id", { count: "exact", head: true })
+    .eq("assignment_id", assignmentId);
+  if (countError) throw countError;
+  if (count) return;
+
+  const { data: assignment, error: readError } = await db
+    .from("assignments")
+    .select("bill_rate, pay_rate, overtime_multiplier, start_date")
+    .eq("id", assignmentId)
+    .single();
+  if (readError) throw readError;
+
+  const { error } = await db.from("assignment_rates").insert({
+    assignment_id: assignmentId,
+    bill_rate: assignment.bill_rate,
+    pay_rate: assignment.pay_rate,
+    overtime_multiplier: assignment.overtime_multiplier,
+    effective_from: assignment.start_date,
+  });
+  if (error) throw error;
 }
 
 async function ensureTimesheet(input: {

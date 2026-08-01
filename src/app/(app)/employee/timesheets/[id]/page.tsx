@@ -85,7 +85,8 @@ export default async function TimesheetDetailPage({
         }
       />
 
-      {timesheet.reviewed_at && (
+      {timesheet.reviewed_at &&
+        ["approved", "invoiced", "paid"].includes(timesheet.status) && (
         <div className="mb-4 rounded-md border bg-muted/40 px-4 py-3 text-sm">
           <span className="font-medium">Approved by</span>{" "}
           {timesheet.reviewer?.full_name ?? "—"} on{" "}
@@ -114,6 +115,7 @@ export default async function TimesheetDetailPage({
           initialEntries={entries}
           initialAttachments={attachments}
           reviewNote={timesheet.review_note}
+          initialChallengesLearnings={timesheet.challenges_learnings}
         />
       ) : (
         <TimesheetReadOnly
@@ -127,6 +129,7 @@ export default async function TimesheetDetailPage({
           }}
           currency={currency}
           showAmounts={false}
+          challengesLearnings={timesheet.challenges_learnings}
         />
       )}
     </div>

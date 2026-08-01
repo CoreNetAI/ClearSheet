@@ -26,6 +26,7 @@ export function TimesheetReadOnly({
   totals,
   currency,
   showAmounts = true,
+  challengesLearnings,
 }: {
   entries: { work_date: string; hours: number; entry_type: EntryType }[];
   attachments: Pick<
@@ -41,6 +42,7 @@ export function TimesheetReadOnly({
   currency: string;
   // Employees don't see bill/pay amounts — only reviewers/finance/admin do.
   showAmounts?: boolean;
+  challengesLearnings?: string | null;
 }) {
   const sorted = [...entries].sort((a, b) =>
     a.work_date.localeCompare(b.work_date)
@@ -151,6 +153,21 @@ export function TimesheetReadOnly({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Challenges/Learnings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {challengesLearnings ? (
+            <p className="whitespace-pre-wrap break-words text-sm">
+              {challengesLearnings}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not provided.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -44,8 +44,9 @@ Key implementation decisions and the reasoning behind them.
 - `draft → submitted → approved → invoiced → paid`; reject returns a submission
   to `draft` with a `review_note`. Voiding an invoice returns its `invoiced`
   timesheets to `approved` so they can be re‑invoiced.
-- **Submit is blocked** without ≥1 entry with hours **and** ≥1
-  `approved_timesheet` attachment (enforced server‑side).
+- **Submit is blocked** without ≥1 entry with hours, a non-blank
+  `challenges_learnings` note, **and** ≥1 `approved_timesheet` attachment
+  (enforced server‑side).
 - Every transition writes `audit_log`.
 
 ## Files

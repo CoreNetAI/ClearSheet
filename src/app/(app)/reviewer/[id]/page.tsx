@@ -96,6 +96,7 @@ export default async function ReviewDetailPage({
               payAmount: Number(ts.pay_amount),
             }}
             currency={currency}
+            challengesLearnings={ts.challenges_learnings}
           />
         </div>
 

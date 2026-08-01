@@ -9,11 +9,8 @@ import { actionError, actionOk, type ActionResult } from "@/lib/actions";
 import { appBaseUrl, firm } from "@/lib/config";
 import { formatMoney, formatDate } from "@/lib/format";
 import { renderInvoicePdf } from "@/lib/pdf/invoice-render";
-import {
-  isEmailEnabled,
-  sendEmail,
-  invoiceEmailHtml,
-} from "@/lib/email";
+import { getEmailContent, isEmailEnabled, sendEmail } from "@/lib/email";
+import { renderEmail } from "@/lib/email-templates";
 import { createInvoiceCheckout, isStripeEnabled } from "@/lib/stripe";
 import {
   createCustomer,
@@ -141,19 +138,21 @@ export async function emailInvoice(invoiceId: string): Promise<ActionResult> {
     }
   }
 
-  const html = invoiceEmailHtml({
-    firmName: firm.name,
-    clientName: client.name ?? "there",
-    invoiceNumber: inv.invoice_number,
-    total: formatMoney(Number(inv.total)),
-    dueDate: formatDate(inv.due_date),
-    payLink,
-  });
+  const email = renderEmail(
+    await getEmailContent("invoice"),
+    {
+      firmName: firm.name,
+      clientName: client.name ?? "there",
+      invoiceNumber: inv.invoice_number,
+      total: formatMoney(Number(inv.total)),
+      dueDate: formatDate(inv.due_date),
+    },
+    { buttonUrl: payLink }
+  );
 
   const sent = await sendEmail({
     to: client.contact_email,
-    subject: `Invoice ${inv.invoice_number} from ${firm.name}`,
-    html,
+    ...email,
     attachments: [
       { filename: `${inv.invoice_number}.pdf`, content: rendered.bytes },
     ],

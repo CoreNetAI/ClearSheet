@@ -135,6 +135,7 @@ export interface Timesheet {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  challenges_learnings: string | null;
   created_at: string;
   updated_at: string;
 }

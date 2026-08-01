@@ -7,8 +7,9 @@ import { createClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit";
 import { computeTotals } from "@/lib/calc";
 import { rateForPeriod } from "@/lib/rates";
-import { saveTimesheetSchema, entrySchema } from "@/lib/validation";
+import { challengesLearningsSchema, entrySchema } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
+import { notifyReviewersOfSubmission } from "@/lib/notifications";
 import type { EntryInput } from "@/lib/validation";
 import { z } from "zod";
 
@@ -95,11 +96,16 @@ async function loadEditableTimesheet(timesheetId: string) {
 
 export async function saveTimesheet(
   timesheetId: string,
-  entries: EntryInput[]
+  entries: EntryInput[],
+  challengesLearnings: string
 ): Promise<ActionResult> {
   const parsed = z
-    .object({ timesheetId: z.string().uuid(), entries: z.array(entrySchema).max(62) })
-    .safeParse({ timesheetId, entries });
+    .object({
+      timesheetId: z.string().uuid(),
+      entries: z.array(entrySchema).max(62),
+      challengesLearnings: challengesLearningsSchema,
+    })
+    .safeParse({ timesheetId, entries, challengesLearnings });
   if (!parsed.success) return actionError("Invalid timesheet data.");
 
   const ctx = await loadEditableTimesheet(timesheetId);
@@ -137,9 +143,10 @@ export async function saveTimesheet(
       total_ot_hours: totals.totalOtHours,
       bill_amount: totals.billAmount,
       pay_amount: totals.payAmount,
+      challenges_learnings: parsed.data.challengesLearnings || null,
     })
     .eq("id", timesheetId);
-  if (upd.error) return actionError("Could not update totals.");
+  if (upd.error) return actionError("Could not save timesheet.");
 
   void ts;
   revalidatePath(`/employee/timesheets/${timesheetId}`);
@@ -149,10 +156,11 @@ export async function saveTimesheet(
 
 export async function submitTimesheet(
   timesheetId: string,
-  entries: EntryInput[]
+  entries: EntryInput[],
+  challengesLearnings: string
 ): Promise<ActionResult> {
   // Persist latest edits first.
-  const saved = await saveTimesheet(timesheetId, entries);
+  const saved = await saveTimesheet(timesheetId, entries, challengesLearnings);
   if (!saved.ok) return saved;
 
   const ctx = await loadEditableTimesheet(timesheetId);
@@ -166,6 +174,10 @@ export async function submitTimesheet(
     .eq("timesheet_id", timesheetId);
   const hasHours = (entryRows ?? []).some((r) => Number(r.hours) > 0);
   if (!hasHours) return actionError("Add at least one day with hours.");
+
+  if (!challengesLearnings.trim()) {
+    return actionError("Enter your Challenges/Learnings before submitting.");
+  }
 
   const { data: atts } = await supabase
     .from("timesheet_attachments")
@@ -194,6 +206,8 @@ export async function submitTimesheet(
     entityId: timesheetId,
     action: "submit",
   });
+
+  await notifyReviewersOfSubmission(supabase, timesheetId, user.id);
 
   revalidatePath("/employee");
   revalidatePath("/reviewer");

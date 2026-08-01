@@ -8,7 +8,8 @@ import {
   formatPeriodLabel,
   type Period,
 } from "@/lib/periods";
-import { isEmailEnabled, sendEmail, timesheetReminderHtml } from "@/lib/email";
+import { getEmailContent, isEmailEnabled, sendEmail } from "@/lib/email";
+import { renderEmail } from "@/lib/email-templates";
 import type { Assignment, BillingPeriod, Profile, Timesheet } from "@/lib/types";
 
 export interface ReminderResult {
@@ -26,7 +27,7 @@ type AssignmentRow = Assignment & { client: { name: string } | null };
 interface DueItem {
   client: string;
   title: string;
-  periodLabel: string;
+  period: string;
 }
 
 /**
@@ -111,29 +112,28 @@ export async function sendTimesheetReminders(): Promise<ReminderResult> {
       list.push({
         client: a.client?.name ?? "Client",
         title: a.title || "Assignment",
-        periodLabel: formatPeriodLabel(period),
+        period: formatPeriodLabel(period),
       });
       dueByEmployee.set(a.employee_id, list);
     }
   }
 
+  const content = await getEmailContent("timesheet_reminder");
   const result: ReminderResult = { ...empty };
   for (const [employeeId, items] of dueByEmployee) {
     const profile = profileById.get(employeeId);
     if (!profile?.email) continue; // inactive, or no email on file
     result.duePeriods += items.length;
-    const sent = await sendEmail({
-      to: profile.email,
-      subject: `Timesheet reminder — ${items.length} period${
-        items.length === 1 ? "" : "s"
-      } awaiting submission`,
-      html: timesheetReminderHtml({
+    const email = renderEmail(
+      content,
+      {
         firmName: firm.name,
         employeeName: profile.full_name?.split(" ")[0] || "there",
-        appUrl: appBaseUrl,
-        items,
-      }),
-    });
+        periodCount: `${items.length} period${items.length === 1 ? "" : "s"}`,
+      },
+      { periods: items, buttonUrl: `${appBaseUrl}/employee` }
+    );
+    const sent = await sendEmail({ to: profile.email, ...email });
     if (sent.ok) {
       result.employeesNotified += 1;
       result.remindersSent += 1;
