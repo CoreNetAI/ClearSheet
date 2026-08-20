@@ -74,7 +74,8 @@ There is **no "create timesheet for any range I want"** button — by design, to
 - **Clear** the grid.
 - **Upload the client-approved timesheet** (auto-uploads the moment they pick a file; can preview or delete and re-upload).
 - **Save draft** any time.
-- **Submit for review** — server-side enforced: at least one hour AND at least one approved-file attachment, or submission is blocked.
+- **Fill in Challenges/Learnings** — one free-text box per timesheet, saved with the draft and shown to reviewers.
+- **Submit for review** — server-side enforced: at least one hour, Challenges/Learnings, AND at least one approved-file attachment, or submission is blocked.
 - **My Timesheets** — see every past period with its status; can re-open drafts; can read the reviewer's note if returned.
 
 **What they CANNOT see/do:**
@@ -172,6 +173,11 @@ There is **no "create timesheet for any range I want"** button — by design, to
 **Assignments page (`/admin/assignments`):**
 - New/edit assignment — employee, client, title, bill rate, pay rate, employment type (W2/1099), OT multiplier (default 1.5), billing period, start date, optional end date.
 
+**Email Templates page (`/admin/email-templates`):**
+- View and edit the subject, heading, message, button text, and footer of each email ClearSheet sends, with a live preview.
+- Text is plain text with `{{variables}}`. Layout, links, the invoice PDF, and data tables stay fixed. **Reset to default** restores the built-in text.
+- Forgot-password and signup-confirmation emails are sent by Supabase and edited there.
+
 **Integrations page (`/admin/integrations`):**
 - Status of email / Stripe / QBO (configured or not).
 - Send a test email (if Resend is configured).
@@ -223,7 +229,7 @@ Invoices have their own lifecycle: `draft → sent → paid` (or `void` from any
 - **No expense reports / mileage.** Hours only.
 - **No client portal.** Clients sign approved timesheets outside ClearSheet (email/scan); the employee uploads the signed file as evidence.
 - **No back-fill UI for missed past periods.** If an employee misses a period, an admin needs to intervene (manual DB edit) — worth knowing for the first month of use.
-- **No email/SMS notifications on status changes** (yet — Resend is wired for invoice email only).
+- **Few notifications on status changes.** Reviewers are emailed when a timesheet is submitted, and employees when it is approved, approved with changes, or rejected. Finance and invoice status changes send nothing yet.
 - **No 2-factor auth** in the app itself (relies on Supabase's built-in auth).
 - **Single-tenant.** One ClearSheet deployment = one firm. Multiple paying customers means multiple deployments (or the multi-tenant refactor).
 - **Not yet polished for mobile** (works, but tables are dense).

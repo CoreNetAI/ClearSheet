@@ -10,7 +10,7 @@ QuickBooks/Stripe/email are downstream destinations it pushes *to*. One deployme
 | Step | Who | Action |
 |------|-----|--------|
 | 1 | **Operator** (you, the builder) | Created out-of-band in the Supabase dashboard (`role=employee`, `is_operator=true`). Hidden from the customer. Owns **Integrations** (connect QuickBooks, test email, see Stripe/email status) + **Storage** (DB/R2 usage). Sees no customer business data. |
-| 2 | **Admin** (the firm's manager) | First admin created in Supabase; afterward admins are invited in-app. Runs the firm: users, clients, assignments — and can do everything Reviewer + Finance do. |
+| 2 | **Admin** (the firm's manager) | First admin created in Supabase: add the user, then set `role = 'admin'` on their `profiles` row (new accounts always start as employee). Afterward admins are invited in-app. Runs the firm: users, clients, assignments — and can do everything Reviewer + Finance do. |
 | 3 | **Employees / Reviewers / Finance** | Admin → **Users → New user** (email + name + role). An **invite email** goes out; the person clicks it, **sets their own password**, and logs in. (No admin-set passwords.) To retire someone, set them **Inactive** — never delete (history is preserved). |
 
 **Assignment** is the key object an admin creates: it ties an *employee* to a *client* with a **bill rate**, **pay rate**, **employment type** (W2/1099), **OT multiplier** (default 1.5×), and a **billing period** (weekly / biweekly / semimonthly / monthly). The billing period drives everything downstream — employees never pick dates.
@@ -50,7 +50,8 @@ draft ─submit→ submitted ─approve→ approved ─invoice→ invoiced ─ma
   2. **Fill weekdays** — one click puts N hours of Regular on Mon–Fri.
   3. **Import Excel/CSV** — upload a sheet; preview matched days; Apply.
 - **Upload the client-approved file** (PDF/PNG/JPG/XLSX ≤10 MB) — **required to submit**.
-- **Save draft** anytime; **Submit for review** needs ≥1 hour **and** an approved-file attachment (enforced server-side).
+- **Challenges/Learnings** — one free-text box per timesheet (≤2000 characters), saved with the draft and **required to submit**. Reviewers see it alongside the hours.
+- **Save draft** anytime; **Submit for review** needs ≥1 hour, **Challenges/Learnings**, **and** an approved-file attachment (enforced server-side).
 - Employees **never see bill/pay amounts or rates** — only their hours.
 
 ---
@@ -67,6 +68,8 @@ draft ─submit→ submitted ─approve→ approved ─invoice→ invoiced ─ma
 | Users / Clients / Assignments | — | — | — | ✅ | — |
 | Integrations · Storage | — | — | — | — | ✅ |
 
+- **Reviewers are emailed** when a timesheet is submitted, with a link straight to it (admins instead, if there is no active reviewer).
+- **Employees are emailed** the outcome of every review, including the reviewer's note on a rejection or edit.
 - **Reviewer** is the quality gate: **Approve**, **Reject with note** (→ back to employee as draft), or **Edit & approve** (fix hours + required note, one step). Every change is audit-logged.
 - **Finance** turns approved hours into money: invoices, payroll, payments. **Cannot** create users/clients/assignments (admin sets the pipeline up).
 - **Admin** = the firm's operator-of-record; superset of Reviewer + Finance + setup.
