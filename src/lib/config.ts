@@ -15,6 +15,23 @@ export const firm = {
   logoUrl: process.env.FIRM_LOGO_URL || "",
 };
 
+/**
+ * Comma-separated addresses copied on the "Timesheet received" email sent to
+ * an employee after they submit. Blank means no CC. Entries that aren't email
+ * addresses are reported in `invalid` and never sent to.
+ */
+export function timesheetReceivedCc(): { valid: string[]; invalid: string[] } {
+  const entries = (process.env.TIMESHEET_RECEIVED_CC ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const isEmail = (e: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(e);
+  return {
+    valid: entries.filter(isEmail),
+    invalid: entries.filter((e) => !isEmail(e)),
+  };
+}
+
 /** Optional-feature flags, derived from presence of credentials. */
 export const features = {
   email: Boolean(process.env.RESEND_API_KEY),

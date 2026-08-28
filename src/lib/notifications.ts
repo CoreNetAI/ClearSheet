@@ -1,7 +1,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { appBaseUrl, firm } from "@/lib/config";
+import {
+  appBaseUrl,
+  defaultTimezone,
+  firm,
+  timesheetReceivedCc,
+} from "@/lib/config";
 import { getEmailContent, isEmailEnabled, sendEmail } from "@/lib/email";
 import { renderEmail, type EmailTemplateKey } from "@/lib/email-templates";
 import { formatPeriodLabel } from "@/lib/periods";
@@ -67,6 +72,67 @@ export async function notifyReviewersOfSubmission(
   }
 }
 
+/**
+ * Acknowledges a submission to the employee, echoing their Challenges/Learnings,
+ * and copies the CC list from TIMESHEET_RECEIVED_CC. Never throws: the timesheet
+ * is already submitted, so a failed email must not make the submit look failed.
+ */
+export async function notifyEmployeeOfSubmission(
+  supabase: SupabaseClient,
+  timesheetId: string
+): Promise<void> {
+  if (!isEmailEnabled()) return;
+
+  try {
+    const summary = await loadTimesheetSummary(supabase, timesheetId);
+    const email = summary?.employee?.email;
+    if (!summary || !email || summary.employee?.status !== "active") return;
+
+    const cc = timesheetReceivedCc();
+    if (cc.invalid.length) {
+      console.warn(
+        `TIMESHEET_RECEIVED_CC has invalid entries, skipped: ${cc.invalid.join(", ")}`
+      );
+    }
+
+    const submittedAt = formatInFirmTimezone(summary.submittedAt);
+    const rendered = renderEmail(
+      await getEmailContent("timesheet_received"),
+      {
+        firmName: firm.name,
+        employeeName: summary.employee.full_name?.split(" ")[0] || "there",
+        submittedAt,
+        ...summary.variables,
+      },
+      {
+        details: [...summary.details, { label: "Submitted", value: submittedAt }],
+        note: summary.challengesLearnings || "Not provided.",
+        noteLabel: "Your Challenges/Learnings",
+        buttonUrl: `${appBaseUrl}/employee/timesheets/${timesheetId}`,
+      }
+    );
+    const sent = await sendEmail({ to: email, cc: cc.valid, ...rendered });
+    if (!sent.ok) console.error(`Submission receipt not sent: ${sent.error}`);
+  } catch (e) {
+    console.error("Submission receipt failed", e);
+  }
+}
+
+// "Nov 7, 2026, 9:15 AM EST" in the firm's timezone, not the server's (UTC on
+// Cloudflare), so employees see the time they actually submitted.
+function formatInFirmTimezone(iso: string | null): string {
+  const date = iso ? new Date(iso) : new Date();
+  return date.toLocaleString("en-US", {
+    timeZone: defaultTimezone,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
 export type ReviewOutcome = "approved" | "edited_and_approved" | "rejected";
 
 const REVIEW_TEMPLATE: Record<ReviewOutcome, EmailTemplateKey> = {
@@ -119,7 +185,7 @@ async function loadTimesheetSummary(
   const { data: ts } = await supabase
     .from("timesheets")
     .select(
-      "period_start, period_end, total_regular_hours, total_ot_hours, employee:profiles!employee_id(full_name, email, status), assignment:assignments(title, client:clients(name))"
+      "period_start, period_end, total_regular_hours, total_ot_hours, submitted_at, challenges_learnings, employee:profiles!employee_id(full_name, email, status), assignment:assignments(title, client:clients(name))"
     )
     .eq("id", timesheetId)
     .maybeSingle();
@@ -137,6 +203,8 @@ async function loadTimesheetSummary(
   );
   return {
     employee: first(ts.employee),
+    submittedAt: ts.submitted_at as string | null,
+    challengesLearnings: ts.challenges_learnings as string | null,
     variables: { client, title, period, hours },
     details: [
       { label: "Client", value: client },

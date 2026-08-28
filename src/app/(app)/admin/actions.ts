@@ -174,6 +174,9 @@ export async function saveEmailTemplate(input: {
   }
   const { key, ...content } = parsed.data;
   if (!isEmailTemplateKey(key)) return actionError("Unknown email template.");
+  if (EMAIL_TEMPLATES[key].sampleBlocks.buttonUrl && !content.buttonLabel) {
+    return actionError("Button text is required");
+  }
 
   const unknown = findUnknownVariables(EMAIL_TEMPLATES[key], content);
   if (unknown.length > 0) {

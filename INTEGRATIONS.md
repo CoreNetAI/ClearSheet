@@ -43,7 +43,9 @@ Configured in the **Supabase dashboard**, not in app code.
 ## Email — Resend (optional)
 
 1. Create a Resend account, verify a sending domain (SPF/DKIM), create an API key.
-2. Set `RESEND_API_KEY` and `FROM_EMAIL` (on the verified domain).
+2. Set `RESEND_API_KEY` and `FROM_EMAIL` (on the verified domain). Optionally set
+   `TIMESHEET_RECEIVED_CC` to a comma-separated list of addresses copied on the
+   "Timesheet received" email employees get after submitting.
 3. Test from **Admin → Integrations → Email → Send test**.
 
 For quick testing you may use Resend's onboarding/test domain; production needs a
@@ -78,6 +80,49 @@ Local webhook testing: `stripe listen --forward-to localhost:3000/api/webhooks/s
    creates the QBO invoice (sandbox lines use a default Service item).
 
 ---
+
+## 1:1 meetings — Zoom (optional)
+
+Bi‑weekly 1:1 meetings between each employee and the meeting conductors.
+Settings are the `MEETING_*` and `ZOOM_*` values in `.env.example`; the admin
+screen is **Meetings** (`/admin/meetings`).
+
+- **Zoom app:** Zoom Marketplace → Develop → Build App → **Server‑to‑Server
+  OAuth**. Add scopes `meeting:write:meeting:admin`,
+  `meeting:update:meeting:admin`, `meeting:delete:meeting:admin`, activate it,
+  and copy the Account ID, Client ID and Client Secret.
+- **Conductors:** `MEETING_CONDUCTORS`; all attend every meeting, so meetings
+  run one after another. The first address is the Zoom host and must be a user
+  on that Zoom account.
+- **Cycles:** created automatically `MEETING_GENERATE_DAYS_AHEAD` days before
+  each cycle starts. Active employees who accepted their invite are shuffled
+  into slots (10:00–16:00, 15 min meeting + 15 min gap = 12 a day by default).
+  If there are more employees than slots, the rest are listed on the admin
+  screen, where they can be added to any free slot; the next cycle reshuffles
+  everyone.
+- **Email:** one per meeting, `MEETING_NOTICE_HOURS` (24) before it, to the
+  employee and every conductor, with the Zoom link and a calendar file. The
+  Zoom meeting is created at that moment, which keeps us under Zoom's daily
+  meeting‑create limit.
+- **Admin changes** (reschedule, cancel, send now, add to a free slot) take
+  effect immediately: Zoom is updated and, if the invite already went out,
+  everyone gets a rescheduled/canceled email right away.
+- **Database:** run `supabase/migrations/20250101000016_meetings.sql`.
+
+## Scheduled jobs — Azure Functions timer (`azure/cron`)
+
+The app's scheduled jobs are secured endpoints called by a small Azure Function
+App with `Authorization: Bearer <CRON_SECRET>`:
+
+| Function | Schedule (UTC) | Calls |
+|---|---|---|
+| `timesheetReminders` | Mondays 13:00 | `POST /api/cron/reminders` |
+| `meetings` | every minute | `POST /api/cron/meetings` |
+
+Function App settings: `APP_BASE_URL` (the app's public URL) and `CRON_SECRET`
+(same value as the app). Deploy with VS Code → **Azure Functions: Deploy to
+Function App…** from the `azure/cron` folder. Run history is under each
+function's **Monitor** tab.
 
 ## Backups & keep‑alive (GitHub Actions)
 

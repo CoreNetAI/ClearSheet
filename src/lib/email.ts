@@ -14,7 +14,7 @@ export function isEmailEnabled(): boolean {
 
 // Seeded accounts and clients use these domains. Some belong to other people, so
 // never deliver to them; a real send would leak data and hurt sender reputation.
-function isTestAddress(address: string): boolean {
+export function isTestAddress(address: string): boolean {
   const domain = address.split("@").pop()?.trim().toLowerCase() ?? "";
   return (
     domain === "test.com" || domain === "example.com" || domain.endsWith(".test")
@@ -30,25 +30,51 @@ export interface EmailAttachment {
   content: Uint8Array;
 }
 
+export interface EmailAttachmentWithType extends EmailAttachment {
+  contentType?: string;
+}
+
+/**
+ * Sends one email. `to` may be one address or several; with several, the first
+ * is the main recipient and must be deliverable, while other test addresses
+ * are dropped.
+ */
 export async function sendEmail(opts: {
-  to: string;
+  to: string | string[];
+  cc?: string[];
   subject: string;
   html: string;
-  attachments?: EmailAttachment[];
+  attachments?: EmailAttachmentWithType[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isEmailEnabled()) return { ok: false, error: "Email is not configured." };
-  if (isTestAddress(opts.to)) {
-    return { ok: false, error: `Not sent: ${opts.to} is a test address.` };
+  const toList = Array.from(
+    new Set(
+      (Array.isArray(opts.to) ? opts.to : [opts.to])
+        .map((a) => a.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  if (toList.length === 0) return { ok: false, error: "No recipient." };
+  if (isTestAddress(toList[0])) {
+    return { ok: false, error: `Not sent: ${toList[0]} is a test address.` };
   }
+  const to = toList.filter((a) => !isTestAddress(a));
+  // Drop test addresses and anyone already in "to" from the CC list, so a bad
+  // CC entry never blocks the main email.
+  const cc = Array.from(
+    new Set((opts.cc ?? []).map((a) => a.trim().toLowerCase()))
+  ).filter((a) => a && !to.includes(a) && !isTestAddress(a));
   const resend = new Resend(process.env.RESEND_API_KEY!);
   const { error } = await resend.emails.send({
     from: fromAddress(),
-    to: opts.to,
+    to,
+    ...(cc.length ? { cc } : {}),
     subject: opts.subject,
     html: opts.html,
     attachments: opts.attachments?.map((a) => ({
       filename: a.filename,
       content: Buffer.from(a.content),
+      ...(a.contentType ? { contentType: a.contentType } : {}),
     })),
   });
   if (error) return { ok: false, error: error.message };

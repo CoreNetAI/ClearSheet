@@ -229,7 +229,7 @@ Invoices have their own lifecycle: `draft → sent → paid` (or `void` from any
 - **No expense reports / mileage.** Hours only.
 - **No client portal.** Clients sign approved timesheets outside ClearSheet (email/scan); the employee uploads the signed file as evidence.
 - **No back-fill UI for missed past periods.** If an employee misses a period, an admin needs to intervene (manual DB edit) — worth knowing for the first month of use.
-- **Few notifications on status changes.** Reviewers are emailed when a timesheet is submitted, and employees when it is approved, approved with changes, or rejected. Finance and invoice status changes send nothing yet.
+- **Few notifications on status changes.** Employees get a "Timesheet received" receipt when they submit (with an optional CC list), reviewers are emailed when a timesheet is submitted, and employees are emailed when it is approved, approved with changes, or rejected. Finance and invoice status changes send nothing yet.
 - **No 2-factor auth** in the app itself (relies on Supabase's built-in auth).
 - **Single-tenant.** One ClearSheet deployment = one firm. Multiple paying customers means multiple deployments (or the multi-tenant refactor).
 - **Not yet polished for mobile** (works, but tables are dense).

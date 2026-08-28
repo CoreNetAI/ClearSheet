@@ -1,0 +1,13 @@
+{
+  "name": "clearsheet-cron",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Functions timers that trigger ClearSheet's secured /api/cron endpoints",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  }
+}

@@ -124,7 +124,8 @@ export const emailTemplateSchema = z.object({
   subject: z.string().trim().min(1, "Subject is required").max(200),
   heading: z.string().trim().min(1, "Heading is required").max(200),
   body: z.string().trim().min(1, "Message is required").max(5000),
-  buttonLabel: z.string().trim().min(1, "Button text is required").max(60),
+  // Required only for emails that have a button; checked in the save action.
+  buttonLabel: z.string().trim().max(60),
   footer: z.string().trim().max(2000),
 });
 

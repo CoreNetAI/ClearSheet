@@ -277,15 +277,17 @@ function TemplateEditor({
                 Plain text. Leave a blank line to start a new paragraph.
               </p>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="template-button">Button text</Label>
-              <Input
-                id="template-button"
-                value={content.buttonLabel}
-                maxLength={60}
-                onChange={(e) => update("buttonLabel", e.target.value)}
-              />
-            </div>
+            {template.sampleBlocks.buttonUrl && (
+              <div className="grid gap-2">
+                <Label htmlFor="template-button">Button text</Label>
+                <Input
+                  id="template-button"
+                  value={content.buttonLabel}
+                  maxLength={60}
+                  onChange={(e) => update("buttonLabel", e.target.value)}
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="template-footer">Footer (optional)</Label>
               <Textarea

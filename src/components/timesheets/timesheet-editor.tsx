@@ -338,7 +338,7 @@ export function TimesheetEditor({
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="p-3 font-medium">Day</th>
                   {CATS.map((c) => (
-                    <th key={c.key} className="p-3 text-right font-medium">
+                    <th key={c.key} className="p-3 text-center font-medium">
                       {c.label}
                     </th>
                   ))}
@@ -366,7 +366,7 @@ export function TimesheetEditor({
                           onChange={(e) =>
                             setCell(date, c.key, e.target.value)
                           }
-                          className="h-9 w-20 text-right"
+                          className="mx-auto h-9 w-20 text-center"
                           aria-label={`${c.label} hours for ${date}`}
                         />
                       </td>

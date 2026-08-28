@@ -1,6 +1,7 @@
 import {
   Building2,
   Briefcase,
+  CalendarClock,
   CheckCheck,
   ClipboardCheck,
   DollarSign,
@@ -55,6 +56,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Clients", href: "/admin/clients", icon: Building2 },
     { label: "Assignments", href: "/admin/assignments", icon: Briefcase },
+    { label: "Meetings", href: "/admin/meetings", icon: CalendarClock },
     { label: "Email Templates", href: "/admin/email-templates", icon: Mail },
   ],
 };

@@ -68,6 +68,7 @@ draft ─submit→ submitted ─approve→ approved ─invoice→ invoiced ─ma
 | Users / Clients / Assignments | — | — | — | ✅ | — |
 | Integrations · Storage | — | — | — | — | ✅ |
 
+- **Employees get a "Timesheet received" email** when they submit, echoing their Challenges/Learnings, with the addresses in `TIMESHEET_RECEIVED_CC` copied.
 - **Reviewers are emailed** when a timesheet is submitted, with a link straight to it (admins instead, if there is no active reviewer).
 - **Employees are emailed** the outcome of every review, including the reviewer's note on a rejection or edit.
 - **Reviewer** is the quality gate: **Approve**, **Reject with note** (→ back to employee as draft), or **Edit & approve** (fix hours + required note, one step). Every change is audit-logged.

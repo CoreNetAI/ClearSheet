@@ -7,11 +7,15 @@ export type EmailTemplateKey =
   | "user_invite"
   | "email_changed"
   | "timesheet_reminder"
+  | "timesheet_received"
   | "timesheet_submitted"
   | "timesheet_approved"
   | "timesheet_approved_with_changes"
   | "timesheet_returned"
-  | "invoice";
+  | "invoice"
+  | "meeting_invite"
+  | "meeting_rescheduled"
+  | "meeting_canceled";
 
 export interface EmailContent {
   subject: string;
@@ -26,6 +30,7 @@ export interface EmailBlocks {
   details?: { label: string; value: string }[];
   periods?: { client: string; title: string; period: string }[];
   note?: string | null;
+  noteLabel?: string;
   buttonUrl?: string | null;
 }
 
@@ -63,6 +68,25 @@ const TIMESHEET_DETAILS = [
 ];
 
 const TIMESHEET_FIXED = "Client, assignment, period, and hours table; link to the timesheet.";
+
+const MEETING_VARIABLES = [
+  { name: "employeeName", description: "Employee's first name", sample: "Priya" },
+  { name: "meetingDate", description: "Meeting date", sample: "Friday, Nov 13, 2026" },
+  { name: "meetingTime", description: "Start time with timezone", sample: "10:00 AM EST" },
+  { name: "duration", description: "Meeting length", sample: "15 minutes" },
+  { name: "conductors", description: "Meeting conductors", sample: "Sam Lee, Alex Kim" },
+  FIRM_VARIABLE,
+];
+
+const MEETING_DETAILS = [
+  { label: "Date", value: "Friday, Nov 13, 2026" },
+  { label: "Time", value: "10:00 AM EST" },
+  { label: "Length", value: "15 minutes" },
+  { label: "With", value: "Sam Lee, Alex Kim" },
+  { label: "Zoom", value: "https://zoom.us/j/123456789" },
+];
+
+const MEETING_SENT_TO = "The employee and every meeting conductor (all in To)";
 
 export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateDefinition> = {
   user_invite: {
@@ -131,6 +155,37 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateDefinition> 
         { client: "Acme Corp", title: "Software Engineer", period: "Oct 26 – Nov 1, 2026" },
         { client: "Acme Corp", title: "Software Engineer", period: "Nov 2 – Nov 8, 2026" },
       ],
+      buttonUrl: "#",
+    },
+  },
+  timesheet_received: {
+    key: "timesheet_received",
+    name: "Timesheet received",
+    sentTo: "The employee, plus the CC list in TIMESHEET_RECEIVED_CC",
+    sentWhen: "An employee submits a timesheet",
+    fixedContent: `${TIMESHEET_FIXED} The submission time and the employee's Challenges/Learnings.`,
+    variables: [
+      ...TIMESHEET_VARIABLES,
+      {
+        name: "submittedAt",
+        description: "Date and time it was submitted",
+        sample: "Nov 7, 2026, 9:15 AM EST",
+      },
+    ],
+    defaults: {
+      subject: "We received your timesheet ({{period}})",
+      heading: "Timesheet received",
+      body: "Hello {{employeeName}},\n\nThanks, we received your timesheet for {{period}} on {{submittedAt}}. A reviewer will look at it soon. Here is what you submitted.",
+      buttonLabel: "View timesheet",
+      footer: "— {{firmName}}",
+    },
+    sampleBlocks: {
+      details: [
+        ...TIMESHEET_DETAILS,
+        { label: "Submitted", value: "Nov 7, 2026, 9:15 AM EST" },
+      ],
+      note: "Challenge: the client VPN was down on Tuesday.\nLearning: set up the new CI pipeline.",
+      noteLabel: "Your Challenges/Learnings",
       buttonUrl: "#",
     },
   },
@@ -230,6 +285,60 @@ export const EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplateDefinition> 
       footer: "Thank you for your business.",
     },
     sampleBlocks: { buttonUrl: "#" },
+  },
+  meeting_invite: {
+    key: "meeting_invite",
+    name: "1:1 meeting invite",
+    sentTo: MEETING_SENT_TO,
+    sentWhen: "24 hours before the meeting (MEETING_NOTICE_HOURS), or right away if it's scheduled sooner",
+    fixedContent: "Date, time, length, conductors, and Zoom link; a calendar (.ics) file.",
+    variables: MEETING_VARIABLES,
+    defaults: {
+      subject: "Your 1:1 meeting: {{meetingDate}} at {{meetingTime}}",
+      heading: "Your 1:1 meeting",
+      body: "Hello {{employeeName}},\n\nYou have a {{duration}} 1:1 meeting with {{conductors}} on {{meetingDate}} at {{meetingTime}}. Please join on time using the Zoom link below.",
+      buttonLabel: "Join Zoom meeting",
+      footer: "If you can't attend, reply to let us know.\n\n— {{firmName}}",
+    },
+    sampleBlocks: { details: MEETING_DETAILS, buttonUrl: "#" },
+  },
+  meeting_rescheduled: {
+    key: "meeting_rescheduled",
+    name: "1:1 meeting rescheduled",
+    sentTo: MEETING_SENT_TO,
+    sentWhen: "An admin moves a meeting whose invite was already sent",
+    fixedContent: "The new date, time, length, conductors, and Zoom link; an updated calendar (.ics) file.",
+    variables: [
+      ...MEETING_VARIABLES,
+      { name: "previousDate", description: "Old meeting date", sample: "Thursday, Nov 12, 2026" },
+      { name: "previousTime", description: "Old start time", sample: "2:30 PM EST" },
+    ],
+    defaults: {
+      subject: "Rescheduled: your 1:1 meeting is now {{meetingDate}} at {{meetingTime}}",
+      heading: "Your 1:1 meeting was rescheduled",
+      body: "Hello {{employeeName}},\n\nYour 1:1 meeting with {{conductors}} has moved from {{previousDate}} at {{previousTime}} to {{meetingDate}} at {{meetingTime}}. Please use the Zoom link below.",
+      buttonLabel: "Join Zoom meeting",
+      footer: "If you can't attend, reply to let us know.\n\n— {{firmName}}",
+    },
+    sampleBlocks: { details: MEETING_DETAILS, buttonUrl: "#" },
+  },
+  meeting_canceled: {
+    key: "meeting_canceled",
+    name: "1:1 meeting canceled",
+    sentTo: MEETING_SENT_TO,
+    sentWhen: "An admin cancels a meeting whose invite was already sent",
+    fixedContent: "The canceled date and time; a calendar (.ics) cancellation.",
+    variables: MEETING_VARIABLES,
+    defaults: {
+      subject: "Canceled: your 1:1 meeting on {{meetingDate}}",
+      heading: "Your 1:1 meeting was canceled",
+      body: "Hello {{employeeName}},\n\nYour 1:1 meeting with {{conductors}} on {{meetingDate}} at {{meetingTime}} has been canceled. You don't need to join.",
+      buttonLabel: "",
+      footer: "— {{firmName}}",
+    },
+    sampleBlocks: {
+      details: MEETING_DETAILS.filter((d) => d.label !== "Zoom"),
+    },
   },
 };
 
@@ -334,7 +443,7 @@ export function renderEmail(
     : "";
 
   const note = blocks.note
-    ? `<p style="margin:0 0 4px;font-weight:600">Reviewer's note</p>
+    ? `<p style="margin:0 0 4px;font-weight:600">${esc(blocks.noteLabel ?? "Reviewer's note")}</p>
        <p style="margin:0 0 16px;padding:10px 12px;background:#f5f6f8;border-radius:6px;white-space:pre-wrap">${esc(blocks.note)}</p>`
     : "";
 

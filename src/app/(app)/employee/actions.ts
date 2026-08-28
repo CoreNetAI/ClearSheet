@@ -9,7 +9,10 @@ import { computeTotals } from "@/lib/calc";
 import { rateForPeriod } from "@/lib/rates";
 import { challengesLearningsSchema, entrySchema } from "@/lib/validation";
 import { actionError, actionOk, type ActionResult } from "@/lib/actions";
-import { notifyReviewersOfSubmission } from "@/lib/notifications";
+import {
+  notifyEmployeeOfSubmission,
+  notifyReviewersOfSubmission,
+} from "@/lib/notifications";
 import type { EntryInput } from "@/lib/validation";
 import { z } from "zod";
 
@@ -207,6 +210,7 @@ export async function submitTimesheet(
     action: "submit",
   });
 
+  await notifyEmployeeOfSubmission(supabase, timesheetId);
   await notifyReviewersOfSubmission(supabase, timesheetId, user.id);
 
   revalidatePath("/employee");

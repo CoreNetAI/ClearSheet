@@ -217,7 +217,7 @@ export function ReviewActions({
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="p-2 font-medium">Day</th>
                   {CATS.map((c) => (
-                    <th key={c.key} className="p-2 text-right font-medium">
+                    <th key={c.key} className="p-2 text-center font-medium">
                       {c.label}
                     </th>
                   ))}
@@ -246,7 +246,7 @@ export function ReviewActions({
                               [date]: { ...g[date], [c.key]: e.target.value },
                             }))
                           }
-                          className="h-8 w-16 text-right"
+                          className="mx-auto h-8 w-16 text-center"
                           aria-label={`${c.label} ${date}`}
                         />
                       </td>
